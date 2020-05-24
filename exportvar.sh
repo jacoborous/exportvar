@@ -21,21 +21,24 @@ fi
 
 DEFINE_string 'envvar' '' 'the environment variable to add a directory to' e
 DEFINE_string 'dir' '' 'a directory' d
-DEFINE_boolean 'useglobal' false 'whether to place the new variable in your local .profile or the global .globalenv profile; default false.' g
+DEFINE_boolean 'useglobal' true 'whether to place the new variable in your local .profile or the global .globalenv profile; default false.' g
+DEFINE_boolean 'prepend' true 'whether to prepend the new directory to the path list rather than append. Defaults false.' p
 
 # parse command line
 FLAGS "$@" || exit 1
 eval set -- "${FLAGS_ARGV}"
 
-shift $(($OPTIND - 1))
+#shift $(($OPTIND - 1))
 
 export ENVVAR_VAL=$FLAGS_envvar
 export DIR_VAL=$FLAGS_dir
 export USE_GLOBAL=$FLAGS_useglobal
+export PREPEND=$FLAGS_prepend
 
 echo "envvar: $ENVVAR_VAL"
 echo "dir: $DIR_VAL"
 echo "useglobal: $USE_GLOBAL"
+echo "prepend: $PREPEND"
 
 # --- Locks -------------------------------------------------------
 LOCK_FILE=/tmp/${SUBJECT}.lock
@@ -49,6 +52,20 @@ trap "rm -f $LOCK_FILE" EXIT
 touch $LOCK_FILE
 
 # -- Functions ---------------------------------------------------------
+
+
+function prepend_dir() {
+	_env_var=$1
+	_dir_val=$2
+	echo "export ${_env_var}=${_dir_val}\${$_env_var:+:\${$_env_var}}"
+}
+
+function append_dir() {
+        _env_var=$1
+        _dir_val=$2
+        echo "export ${_env_var}=\${$_env_var:+\${$_env_var}:}${_dir_val}"
+}
+
 
 function get_all_vars() {
 	dot_prof=$1
@@ -94,7 +111,11 @@ function add_to_profile() {
 	echo "" >> ${dot_prof}
         echo "$header_str" >> ${dot_prof}
 
-        export_str="export $envvar_val=$dir_val:\$$envvar_val"
+	if [[ "$PREPEND" == "1" ]] ; then
+        	export_str=$(prepend_dir $envvar_val $dir_val)
+	else
+		export_str=$(append_dir $envvar_val $dir_val)
+	fi
 
         echo "$export_str" >> ${dot_prof}
         echo "#---------" >> ${dot_prof}

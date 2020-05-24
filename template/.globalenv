@@ -31,13 +31,15 @@
 #SOFTWARE.
 #------------------------------------------------------------------------#
 
-
 # This file contains a template for the global environment file. In case the
 # user wants a clean slate, or during installation, this file can be deployed.
 
 export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:/usr/lib:/usr/local/lib
 export LD_INCLUDE_PATH=/usr/include:/usr/local/include
-export PATH=/bin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/sbin:/usr/local/sbin
+
+# Place the usual in the PATH, if they are not already.
+export PATH="$HOME/bin${PATH:+:${PATH}}"
+export PATH="/bin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/sbin:/usr/local/sbin${PATH:+:${PATH}}"
 
 ##################################################
 ### AMENDMENDS WILL BE APPENDED BEGINNING HERE ###
