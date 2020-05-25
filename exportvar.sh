@@ -1,5 +1,27 @@
 #!/bin/bash
 
+# MIT License
+
+# Copyright (c) [2020] [Tristan Miano] [jacobeus@protonmail.com]
+
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 VERSION=0.1.0
 SUBJECT=exportvar
 
@@ -31,6 +53,7 @@ DEFINE_string 'envvar' '' 'The environment variable to add a directory to.' e
 DEFINE_string 'dir' '' 'The directory to add to the variable.' d
 DEFINE_boolean 'useglobal' true 'Apply this update to the global .globalenv profile instead of your local .profile. The presense of the flag indicates true, otherwise, false.' g
 DEFINE_boolean 'prepend' true 'whether to prepend the new directory to the path list rather than append. The presense of the flag indicates true, otherwise, false.' p
+DEFINE_boolean 'ignore_dupes' true 'if this path already exists in the variable, use this flag to ignore the error and add anyway.' i
 
 # parse command line
 FLAGS "$@" || exit 1
@@ -40,11 +63,13 @@ export ENVVAR_VAL=$FLAGS_envvar
 export DIR_VAL=$FLAGS_dir
 export USE_GLOBAL=$FLAGS_useglobal
 export PREPEND=$FLAGS_prepend
+export IGNORE_DUPES="${FLAGS_ignore_dupes}"
 
 echo "envvar: $ENVVAR_VAL"
 echo "dir: $DIR_VAL"
 echo "useglobal: $USE_GLOBAL"
 echo "prepend: $PREPEND"
+echo "ignore_dupes: $IGNORE_DUPES"
 
 # --- Locks -------------------------------------------------------
 LOCK_FILE=/tmp/${SUBJECT}.lock
@@ -87,6 +112,13 @@ function split_var_to_list() {
 	echo $_dir_list
 }
 
+## add_to_profile
+#  args:
+#  	dot_prof: file containing the profile of the user or the globalenv profile.
+#	envvar_val: name of the path variable.
+#	dir_val: path to concatenate to the parh variable.
+# returns:
+#	0 on success, 1 otherwise. 
 function add_to_profile() {
         dot_prof=$1
 	envvar_val=$2
@@ -107,8 +139,10 @@ function add_to_profile() {
 	do
 		echo "checking $_dir ..."
 		if [[ "${dir_val}" == "${_dir}" ]] ; then
+		    if [[ "$IGNORE_DUPES" == "0" ]] ; then
 			echo "This variable already contains the requested directory. Quitting."
 			exit 0;
+		    fi
 		fi
 	done 
 
@@ -130,6 +164,8 @@ function add_to_profile() {
         echo ""
         echo "sourcing your .profile ... "
 
+	. ${dot_prof}
+
 	return 0;
 }
 
@@ -147,21 +183,24 @@ function add_to_profile_main() {
 		add_to_profile /usr/share/.globalenv $ENVVAR_VAL $dir_val
 		exit 0;
 	else
-		USER=$(whoami)
+	    USER=$(whoami)
+	    if [[ "${USER}" == "root" ]] ; then
+		DOT_PROFILE="/root/.profile"
+	    else
 		DOT_PROFILE="/home/${USER}/.profile"
-
-		echo "Looking for $DOT_PROFILE..."
-		echo ""
-
-		if [ -f "$DOT_PROFILE" ] ; then
-			echo ".profile: $DOT_PROFILE found."
-			echo "$(get_all_vars /usr/share/.globalenv $ENVVAR_VAL $dir_val)"
-			add_to_profile $DOT_PROFILE $ENVVAR_VAL $dir_val
-			exit 0; 
-		else
-			echo ".profile not found in /home/$USER. "
-			exit 1;
-		fi
+	    fi
+	    echo "Looking for $DOT_PROFILE..."
+	    echo ""
+	    
+	    if [ -f "$DOT_PROFILE" ] ; then
+		echo ".profile: $DOT_PROFILE found."
+		echo "$(get_all_vars /usr/share/.globalenv $ENVVAR_VAL $dir_val)"
+		add_to_profile $DOT_PROFILE $ENVVAR_VAL $dir_val
+		exit 0; 
+	    else
+		echo ".profile not found in /home/$USER. "
+		exit 1;
+	    fi
 	fi
 
 }
@@ -176,3 +215,5 @@ if [[ "$DIR_VAL" =~ ":"  ]] ; then
 else
 	add_to_profile_main $DIR_VAL
 fi
+
+
