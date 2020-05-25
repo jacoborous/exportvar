@@ -2,33 +2,39 @@
 
 VERSION=0.1.0
 SUBJECT=exportvar
-EXPORTVAR_DIR="${PWD}"
+
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+  DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE" # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+done
+EXPORTVAR_DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+
 
 . ${EXPORTVAR_DIR}/shFlags/shflags
 
 USAGE="Usage: exportvar v-$VERSION --help | [-e | --envvar [variable_name]] [-d | --dir [directory_name]] [-g | --useglobal | --nouseglobal] "
 
 # --- Option processing --------------------------------------------
-if [ $# == 0 ] ; then
-    echo $USAGE
-    exit 1;
-fi
+#if [ $# == 0 ] ; then
+#    echo $USAGE
+#    exit 1;
+#fi
+#
+#if [ $1 == '--help' ] ; then
+#    echo $USAGE
+#    exit 0;
+#fi
 
-if [ $1 == '--help' ] ; then
-    echo $USAGE
-    exit 0;
-fi
-
-DEFINE_string 'envvar' '' 'the environment variable to add a directory to' e
-DEFINE_string 'dir' '' 'a directory' d
-DEFINE_boolean 'useglobal' true 'whether to place the new variable in your local .profile or the global .globalenv profile; default false.' g
-DEFINE_boolean 'prepend' true 'whether to prepend the new directory to the path list rather than append. Defaults false.' p
+DEFINE_string 'envvar' '' 'The environment variable to add a directory to.' e
+DEFINE_string 'dir' '' 'The directory to add to the variable.' d
+DEFINE_boolean 'useglobal' true 'Apply this update to the global .globalenv profile instead of your local .profile. The presense of the flag indicates true, otherwise, false.' g
+DEFINE_boolean 'prepend' true 'whether to prepend the new directory to the path list rather than append. The presense of the flag indicates true, otherwise, false.' p
 
 # parse command line
 FLAGS "$@" || exit 1
 eval set -- "${FLAGS_ARGV}"
-
-#shift $(($OPTIND - 1))
 
 export ENVVAR_VAL=$FLAGS_envvar
 export DIR_VAL=$FLAGS_dir
