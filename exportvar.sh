@@ -22,6 +22,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+exec 3>&1
+
 VERSION=0.1.0
 SUBJECT=exportvar
 
@@ -85,103 +87,141 @@ touch $LOCK_FILE
 # -- Functions ---------------------------------------------------------
 
 
+function _echo_err() {
+        cat <<< "$@" 1>&2;
+}
+
 function prepend_dir() {
-	_env_var=$1
-	_dir_val=$2
+	local _env_var=$1
+	local _dir_val=$2
 	echo "export ${_env_var}=${_dir_val}\${$_env_var:+:\${$_env_var}}"
 }
 
 function append_dir() {
-        _env_var=$1
-        _dir_val=$2
+        local _env_var=$1
+        local _dir_val=$2
         echo "export ${_env_var}=\${$_env_var:+\${$_env_var}:}${_dir_val}"
 }
 
 
 function get_all_vars() {
-	dot_prof=$1
-	envvar_val=$2
-	dir_list=$(echo $(cat $dot_prof | grep -n '$envvar_val' | awk -F= '{print $2}'))
-	echo $dir_list
+	local dot_prof=$1
+	local envvar_val=$2
+	echo "$(echo $(cat $dot_prof | grep -n '$envvar_val' | awk -F= '{print $2}'))"
 }
 
+
+function split_list_on() {
+    local _split_str=$1
+    local _sep=$2
+    echo "$(echo ${_split_str} | tr ${_sep} ' ')"
+}
+    
 function split_var_to_list() {
-	_env_var=$1
-	_dir_str=${!_env_var}
-	_dir_list=$(echo ${_dir_str} | tr ':' ' ')
-	echo $_dir_list
+        local _env_var=$1
+       	local _dir_str=${!_env_var}
+	echo "$(split_list_on $_dir_str ':')"
+}
+
+function is_member_of() {
+        local _elem=$1
+        local _list=$(split_list_on $2 ':')
+	local _ret="false"
+        for _item in ${_list} ;
+	do
+     		if [[ "${_item}" == "${_elem}" ]] ; then
+		    _ret="true"
+		fi
+	done
+	echo "$_ret"
 }
 
 ## add_to_profile
 #  args:
 #  	dot_prof: file containing the profile of the user or the globalenv profile.
-#	envvar_val: name of the path variable.
-#	dir_val: path to concatenate to the parh variable.
+#	_env_var: name of the path variable.
+#	_dir_val: directory string to concatenate to the path variable.
 # returns:
 #	0 on success, 1 otherwise. 
 function add_to_profile() {
-        dot_prof=$1
-	envvar_val=$2
-	dir_val=$3
+
+        local dot_prof=$1
+	local _env_var=$2
+	local _dir_val=$3
 
         . $dot_prof
 
-	_dir_str=${!envvar_val}
+	local _dir_str=${!_env_var}
 
-        echo "Current value: "
-	echo ""
-        echo "$envvar_val = ${_dir_str}"
-	echo ""
+        _echo_err "Current value: "
+	_echo_err ""
+        _echo_err "$_env_var = ${_dir_str}"
+	_echo_err ""
 
-	_dir_list=$(split_var_to_list $envvar_val)
+	local _dir_list="$(split_var_to_list $_env_var)"
+	local _dedup="${_dir_val}"
 
 	for _dir in ${_dir_list} ;
 	do
-		echo "checking $_dir ..."
-		if [[ "${dir_val}" == "${_dir}" ]] ; then
+		_echo_err "checking $_dir ..."
+		if [[ "${_dir_val}" == "${_dir}" ]] ; then
 		    if [[ "$IGNORE_DUPES" == "0" ]] ; then
-			echo "This variable already contains the requested directory. Quitting."
-			exit 0;
+			_echo_err "This variable already contains the requested directory. Exiting."
+			_handle_error '1'
 		    fi
+		else
+		    if [[ "$(is_member_of $_dir $_dedup)" == "false" ]] ; then  
+			
+			if [[ "$PREPEND" == "1" ]] ; then
+        		    _dedup="${_dedup}:${_dir}"
+			else
+			    _dedup="${_dir}:${_dedup}"
+			fi
+		    fi	
 		fi
-	done 
+	done
 
         header_str="#--------- Added this line from $SUBJECT v-$VERSION on $(date). ---------#"
 
 	echo "" >> ${dot_prof}
         echo "$header_str" >> ${dot_prof}
 
-	if [[ "$PREPEND" == "1" ]] ; then
-        	export_str=$(prepend_dir $envvar_val $dir_val)
+	if [[ "$IGNORE_DUPES" == "1" ]] ; then
+	    export_str="export $_env_var=$_dedup"
 	else
-		export_str=$(append_dir $envvar_val $dir_val)
+	    if [[ "$PREPEND" == "1" ]] ; then
+        	export_str="$(prepend_dir $_env_var $dir_val)"
+	    else
+		export_str="$(append_dir $_env_var $dir_val)"
+	    fi
 	fi
+	
 
         echo "$export_str" >> ${dot_prof}
         echo "#---------" >> ${dot_prof}
 
-        echo "echo \"$export_str\" >> $dot_prof"
-        echo ""
-        echo "sourcing your .profile ... "
+        _echo_err "echo \"$export_str\" >> $dot_prof"
+        _echo_err ""
 
-	. ${dot_prof}
-
-	return 0;
+	echo "0"
+        
 }
 
 ## add_to_profile_main
 #  args:
 #  	dir_val: A string containining the string value of the directory to be added.
 #  returns:
-#  	exit 0 if success, 1 otherwise.
+#  	0 if success, 1 otherwise.
 function add_to_profile_main() {
 
-	dir_val=$1
+        dir_val=$1
+        
+	_echo_err "Adding ${_dir} ..."
 
 	if [ $USE_GLOBAL == 1 ]  ; then
-		echo "$(get_all_vars /usr/share/.globalenv $ENVVAR_VAL $dir_val)"
-		add_to_profile /usr/share/.globalenv $ENVVAR_VAL $dir_val
-		exit 0;
+		_echo_err "$(get_all_vars /usr/share/.globalenv $ENVVAR_VAL $dir_val)"
+		_handle_error "$(add_to_profile /usr/share/.globalenv $ENVVAR_VAL $dir_val)"
+		
 	else
 	    USER=$(whoami)
 	    if [[ "${USER}" == "root" ]] ; then
@@ -189,31 +229,38 @@ function add_to_profile_main() {
 	    else
 		DOT_PROFILE="/home/${USER}/.profile"
 	    fi
-	    echo "Looking for $DOT_PROFILE..."
-	    echo ""
+	    _echo_err "Looking for $DOT_PROFILE..."
+	    _echo_err ""
 	    
 	    if [ -f "$DOT_PROFILE" ] ; then
-		echo ".profile: $DOT_PROFILE found."
-		echo "$(get_all_vars /usr/share/.globalenv $ENVVAR_VAL $dir_val)"
-		add_to_profile $DOT_PROFILE $ENVVAR_VAL $dir_val
-		exit 0; 
+		_echo_err ".profile: $DOT_PROFILE found."
+		_echo_err "$(get_all_vars /usr/share/.globalenv $ENVVAR_VAL $dir_val)"
+		_handle_error "$(add_to_profile $DOT_PROFILE $ENVVAR_VAL $dir_val)"
+		
 	    else
-		echo ".profile not found in /home/$USER. "
-		exit 1;
+		_echo_err ".profile not found in /home/$USER. "
+		_handle_error "1"
 	    fi
 	fi
+}
 
+function _handle_error() {
+    _err_cd=$(( $1 ))
+    if [[ $(($_err_cd)) > 0 ]] ; then
+	_echo_err "Program exited with error code: $(($_err_cd))"
+	exit $(($_err_cd));
+    fi
 }
 
 ## Main ------------------------------------------------------- #
-if [[ "$DIR_VAL" =~ ":"  ]] ; then
-	_add_dirs=$(split_var_to_list $DIR_VAL)
+if [[ "$DIR_VAL" =~ "*:*"  ]] ; then
+	_add_dirs="$(split_list_on $DIR_VAL ':')"
 	for _dir in ${_add_dirs} ; 
 	do
-		add_to_profile_main $_dir
+		_handle_error "$(add_to_profile_main $_dir)"
 	done
 else
-	add_to_profile_main $DIR_VAL
+	_handle_error "$(add_to_profile_main $DIR_VAL)"
 fi
 
 
