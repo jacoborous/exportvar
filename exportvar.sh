@@ -46,8 +46,8 @@ DEFINE_string 'dir' '' 'The directory to add to the variable.' d
 DEFINE_boolean 'useglobal' true 'Apply this update to the global .globalenv profile instead of your local .profile. The presense of the flag indicates true, otherwise, false.' g
 DEFINE_boolean 'prepend' true 'whether to prepend the new directory to the path list rather than append. The presense of the flag indicates true, otherwise, false.' p
 DEFINE_boolean 'ignore_dupes' true 'if this path already exists in the variable, use this flag to ignore the error and add anyway.' i
-DEFINE_string 'write' 'add' 'The write mode: May be an incremental update "add" (default) in which the additional path is added to the variable,\
-	       or "replace" which simply replaces the value of the variable with the argument to --dir. In this case, the [-p | --prepend] flag is ignored. ' w
+DEFINE_string 'write' 'add' '[add | replace | add-static] The write mode: May be an incremental update "add" (default) in which the additional path is added to the variable incrementally,\
+ \nadd-static, which sets the variable equal to a static string with no references, \nor "replace" which simply replaces the value of the variable with the argument to --dir. In this case, the [-p | --prepend] flag is ignored. ' w
 
 # parse command line
 FLAGS "$@" || exit 1
@@ -78,12 +78,16 @@ if [[ "$USE_GLOBAL" == "0" ]] ; then
     _echo_err ""
     export USER=$(whoami)
     if [[ "${USER}" == "root" ]] ; then
-	export DOT_PROFILE="/root/.profile"
+	export USER_HOME="/root"
     else
-	export DOT_PROFILE="/home/${USER}/.profile"
+	export USER_HOME="/home/${USER}"
     fi
-    if [ -f "$DOT_PROFILE" ] ; then
+    if [ -f "${USER_HOME}/.profile" ] ; then
+	export DOT_PROFILE="$USER_HOME/.profile"
 	_echo_err ".profile: $DOT_PROFILE found."
+    elif [ -f "${USER_HOME}/.bash_profile" ] ; then
+	export DOT_PROFILE="$USER_HOME/.bash_profile"
+	_echo_err ".bash_profile $DOT_PROFILE found."
     else
 	_echo_err ".profile not found in /home/$USER. "
 	_handle_error "1"
@@ -102,7 +106,7 @@ _echo_err "envvar: $ENVVAR_VAL"
 _echo_err "dir: $DIR_VAL"
 _echo_err "useglobal: $USE_GLOBAL"
 _echo_err "write: $WRITE_MODE"
-if [[ "$WRITE_MODE" == "add" ]] ; then    
+if [[ "$WRITE_MODE" != "replace" ]] ; then    
     _echo_err "prepend: $PREPEND"
     _echo_err "ignore_dupes: $IGNORE_DUPES"  
 fi
@@ -143,7 +147,10 @@ function add_to_profile() {
 		    if [[ "$IGNORE_DUPES" == "0" ]] ; then
 			_echo_err "Warning: This variable already contains the requested directory."
 			_handle_error '0'
-		    fi
+		    else
+			_echo_err "Error: This variable already contains the requested directory."
+			_handle_error '1'
+		    fi 
 		else
 		    if [[ "$(is_member_of $_dir $_dedup)" == "false" ]] ; then  
 			
@@ -156,23 +163,23 @@ function add_to_profile() {
 		fi
 	done
 
-       	if [[ "$WRITE_MODE" == "replace" ]] ; then
-	    #_expanded="${!_env_var:+${!_env_var}:}${_dedup}"
-	    export_str="export ${_env_var}=$_dedup"
+       	
+	if [[ "$WRITE_MODE" == "replace" ]] ; then
+	    export_str="export ${_env_var}=${dir_val}"
 	else
-	    if [[ "$IGNORE_DUPES" == "1" ]] ; then
-		export_str="export $_env_var=$_dedup"
+	    if [[ "$PREPEND" == "1" ]] ; then
+        	export_str="$(prepend_dir $_env_var $dir_val)"
 	    else
-		if [[ "$PREPEND" == "1" ]] ; then
-        	    export_str="$(prepend_dir $_env_var $dir_val)"
-		else
-		    export_str="$(append_dir $_env_var $dir_val)"
-		fi
+		export_str="$(append_dir $_env_var $dir_val)"
+	    fi
+	    if [[ "$WRITE_MODE" == "add-static" ]] ; then
+		$(${export_str})
+		export_str="export ${_env_var}=${!_env_var}"
 	    fi
 	fi
 	
         write_to_profile "$export_str"
-        
+
         _echo_err "echo \"$export_str\" >> $dot_prof"
         _echo_err ""
 

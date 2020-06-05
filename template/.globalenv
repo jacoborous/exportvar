@@ -42,6 +42,6 @@ export PATH="$HOME/bin${PATH:+:${PATH}}"
 export PATH="/bin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/sbin:/usr/local/sbin${PATH:+:${PATH}}"
 
 ##################################################
-### AMENDMENDS WILL BE APPENDED BEGINNING HERE ###
+### AMENDMENTS WILL BE APPENDED BEGINNING HERE ###
 ##################################################
 
