@@ -34,20 +34,24 @@ while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symli
   [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE" # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
 done
 EXPORTVAR_DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
-    
+
 # Imports
 . ${EXPORTVAR_DIR}/shFlags/shflags
 . ${EXPORTVAR_DIR}/helper_functions.sh
 
-export GLOBALENV_DIR=/usr/share
+
+export GLOBALENV_DIR=/etc/profile.d
 
 DEFINE_string 'envvar' '' 'The environment variable to add a directory to.' e
 DEFINE_string 'dir' '' 'The directory to add to the variable.' d
 DEFINE_boolean 'useglobal' true 'Apply this update to the global .globalenv profile instead of your local .profile. The presense of the flag indicates true, otherwise, false.' g
 DEFINE_boolean 'prepend' true 'whether to prepend the new directory to the path list rather than append. The presense of the flag indicates true, otherwise, false.' p
 DEFINE_boolean 'ignore_dupes' true 'if this path already exists in the variable, use this flag to ignore the error and add anyway.' i
-DEFINE_string 'write' 'add' '[add | replace | add-static] The write mode: May be an incremental update "add" (default) in which the additional path is added to the variable incrementally,\
- \nadd-static, which sets the variable equal to a static string with no references, \nor "replace" which simply replaces the value of the variable with the argument to --dir. In this case, the [-p | --prepend] flag is ignored. ' w
+DEFINE_string 'write' 'add' "$(printf "[add | replace | add-static] The write mode: \n\
+		May be an incremental update "add" (default) which the additional path is added to the variable incrementally,\n\
+		add-static, which sets the variable equal to a static string with no references, or "replace" which simply\n\
+		replaces the value of the variable with the argument to --dir.\n\
+		In this case, the [-p | --prepend] flag is ignored." )" w
 
 # parse command line
 FLAGS "$@" || exit 1
@@ -59,6 +63,8 @@ export USE_GLOBAL="$FLAGS_useglobal"
 export WRITE_MODE="$FLAGS_write"
 export PREPEND="$FLAGS_prepend"
 export IGNORE_DUPES="${FLAGS_ignore_dupes}"
+export VERBOSE="${FLAGS_verbose}"
+
 
 # --- Locks -------------------------------------------------------
 LOCK_FILE=/tmp/${SUBJECT}.lock

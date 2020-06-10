@@ -34,6 +34,13 @@ function _echo_err() {
         cat <<< "$@" 1>&2;
 }
 
+# _echo_out
+function _echo_out() {
+	if [[ "$VERBOSE" == "true" ]] ; then 
+		cat <<< "$@" 1>&2
+	fi
+}
+
 
 # _handle_error
 # args:
@@ -92,7 +99,7 @@ function get_all_vars() {
 function split_list_on() {
     local _split_str=$1
     local _sep=$2
-    echo "$(echo ${_split_str} | tr ${_sep} ' ')"
+    echo "$(echo ${_split_str} | sed -e 's/${_sep}/ /g')"
 }
 
 
@@ -115,13 +122,52 @@ function split_var_to_list() {
 #    "true" or "false"
 function is_member_of() {
         local _elem=$1
-        local _list=$(split_list_on $2 ':')
-	local _ret="false"
-        for _item in ${_list} ;
-	do
-     		if [[ "${_item}" == "${_elem}" ]] ; then
-		    _ret="true"
-		fi
-	done
-	echo "$_ret"
+	local _list=$2
+	local _match=$(echo "${_list}" | grep -c "${_item}")
+        if [[ "${_match}" == "0" ]] ; then
+        	 echo "false"
+	else
+		 echo "true"
+        fi
 }
+
+function read_buffer() {
+	local buffer=${1}
+	echo "$(cat $buffer | tr '\n' ':')"
+}
+
+
+function make_set() {
+	local _list="${1}"
+	local split="$(echo ${_list} | sed -e 's/\:/ /g')"
+	local _init=""
+	local buffer="/tmp/.expvsetbuf" && touch $buffer
+	
+	for i in $split ;
+	do
+	    local _m="$(cat $buffer | grep -c ${i})"
+	    if [[ "$_m" == "0" ]] ; then
+		echo "$i" >> $buffer
+	    fi
+	done
+	echo "$(cat $buffer)"
+	rm -rf $buffer
+}
+
+function find_directories_matching() {
+	local _search_dir=$1
+	local _search_regxp=$2
+	local _find_expr="find $_search_dir -iname \"$_search_regxp\" -printf '%h '"
+	if test "$3" ; then
+		_grep_expr="$_find_expr | grep -vE $3"
+	else
+		_grep_expr="$_find_expr"
+	fi
+	_echo_out "$_grep_expr"
+	local _dirs="$(eval $_grep_expr)"
+	make_set "$_dirs"
+}
+
+
+
+
