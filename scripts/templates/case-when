@@ -1,0 +1,70 @@
+#!/bin/bash
+
+function mkswitch() {
+	local switch_var="${1}"
+	shift 1
+	echo "case \${$switch_var} in"
+	ID=1
+	while [ ! -z "${1}" ] ; do
+		local option="${1}"
+		indent_tab 1 "${option})"
+		indent_tab 2 "\${_ARG_$ID}"
+		indent_tab 1 ";;"
+		shift 1
+		ID=$((ID+1))
+	done
+	indent_tab 1 "*)"
+        indent_tab 2 "\${$ID}"
+        indent_tab 1 ";;"
+	echo "esac"
+}
+
+function defswitchfun() {
+	local identifier="${1}"
+	echo "function switch_${identifier}() {"
+	indent_tab 1 "local index=\${1}"
+	indent_tab 1 "shift 1"
+	indent_tab 1 "$(defswitch ${@})"
+	echo "}"
+}
+
+function defswitch() {
+	local switch_var="${1}"
+        shift 1
+	echo "function ${switch_var}() {"
+	indent_tab 1 "local key=\${1}"
+        indent_tab 1 "case \${key} in"
+        ID=1
+        while [[ ! -z "${1}" ]] ; do
+                local option="${1}"
+		local branch="${2}"
+                indent_tab 2 "${option})"
+                indent_tab 3 "${branch}"
+                indent_tab 2 ";;"
+                shift 2
+                ID=$((ID+1))
+        done
+        indent_tab 2 "*)"
+        indent_tab 3 "echo \"invalid argument: \${key}\""
+	indent_tab 3 "exit 1"
+        indent_tab 2 ";;"
+        indent_tab 1 "esac"
+	echo "}"
+}
+
+
+function indent_tab() {
+	local TABS=$((${1}))
+	local FORMAT="%b\n"
+	local i=$((1))
+	while [[ $i -le $TABS ]] ; do
+		FORMAT="\t${FORMAT}"
+		i=$(($i+1))
+	done
+	local INPUT="${2}"
+	while IFS= read -r line; do
+		printf "$FORMAT" "$line"
+	done <<< "$INPUT"
+}
+
+

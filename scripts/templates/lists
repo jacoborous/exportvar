@@ -1,0 +1,36 @@
+#!/bin/bash
+
+. "$(exportvar_scripts)/templates/case-when"
+
+function list() {
+	local identifier="${1}"
+	shift 1
+	local size=$(($#))
+	local i=$((1))
+	local indices="$i $1"
+	i=$(($i+1))
+        shift 1
+	while [ ! -z "${1}" ] ; do
+		indices="$indices $i ${1}"
+		i=$(($i+1))
+		shift 1
+	done
+	echo "$(defswitch $identifier $indices)"
+}
+
+function map() {
+	local identifier="${1}"
+        shift 1
+	local remaining=$(echo "${@}" | tr " " " ")
+        while [ ! -z "${remaining}" ] ; do
+		local key="${1}"
+		shift 1
+		if [ -z "$keyvalues" ] ; then
+			keyvalues="${key} ${value}"
+		else
+                	keyvalues="$keyvalues ${key} ${value}"
+		fi
+                shift 2
+        done
+        echo "$(defswitch $identifier $keyvalues)"
+}
